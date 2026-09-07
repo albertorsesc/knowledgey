@@ -5,7 +5,7 @@ from typing import Annotated, NoReturn
 import typer
 from pydantic import ValidationError
 
-from knowledgey.cli.render import error_console, render
+from knowledgey.cli.render import error_console, render, render_many
 from knowledgey.config import get_settings
 from knowledgey.ingest import add_pasted_document
 from knowledgey.store import DocumentStore, JsonFileDocumentStore
@@ -58,6 +58,14 @@ def add(
         fail(describe(exc))
 
     render(result, as_json=as_json)
+
+
+@app.command("list")
+def list_documents(
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """List stored documents, newest first."""
+    render_many(_document_store().list_all(), as_json=as_json)
 
 
 @app.callback()
