@@ -15,10 +15,12 @@ def test_version_text() -> None:
     assert result.exit_code == 0
     assert "knowledgey" in result.output
 
+
 def test_version_json_is_parseable() -> None:
     result = runner.invoke(app, ["version", "--json"])
     assert result.exit_code == 0
     assert json.loads(result.output)["name"] == "knowledgey"
+
 
 def test_cli_framework_does_not_leak() -> None:
     offenders = [
