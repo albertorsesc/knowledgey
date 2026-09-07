@@ -7,13 +7,15 @@ from knowledgey.version import get_version
 
 app = typer.Typer(help="Ingest and search your knowledge sources.", no_args_is_help=True)
 
+
 @app.callback()
 def main() -> None:
     """Ingest and search your knowledge sources."""
 
+
 @app.command()
 def version(
-        as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
 ) -> None:
     """Show the installed version."""
     render(get_version(), as_json=as_json)

@@ -12,5 +12,6 @@ class VersionInfo:
     def as_dict(self) -> dict[str, str]:
         return {"name": self.name, "version": self.version}
 
+
 def get_version() -> VersionInfo:
     return VersionInfo(name=DISTRIBUTION_NAME, version=distribution_version(DISTRIBUTION_NAME))

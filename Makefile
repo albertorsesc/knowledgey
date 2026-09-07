@@ -15,9 +15,8 @@ format:
 typecheck:
 	uv run mypy
 
-check:
-	lint typecheck test
+check: lint typecheck test
 
 clean:
-	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+	find src tests -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf .pytest_cache .ruff_cache .mypy_cache

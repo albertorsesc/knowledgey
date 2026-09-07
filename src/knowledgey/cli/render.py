@@ -6,6 +6,7 @@ from rich.console import Console
 console = Console()
 error_console = Console(stderr=True)
 
+
 class Renderable(Protocol):
     def as_dict(self) -> dict[str, str]: ...
 
