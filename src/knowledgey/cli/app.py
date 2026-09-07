@@ -13,6 +13,7 @@ app = typer.Typer(help="Ingest and search your knowledge sources.", no_args_is_h
 def main() -> None:
     """Ingest and search your knowledge sources."""
 
+
 @app.command("config")
 def show_config(
     as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
