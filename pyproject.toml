@@ -5,6 +5,7 @@ description = "Knowledge Ingestion app"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "feedparser>=6.0.14",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "typer>=0.27.2",
@@ -35,6 +36,10 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 files = ["src", "tests"]
 python_version = "3.12"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["feedparser.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
