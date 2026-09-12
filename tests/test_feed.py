@@ -69,3 +69,13 @@ def test_entry_without_body_is_skipped() -> None:
 def test_garbage_input_raises() -> None:
     with pytest.raises(FeedParseError):
         parse_feed("this is not xml at all")
+
+
+def test_a_valid_but_empty_feed_is_not_an_error() -> None:
+    xml = """<?xml version="1.0"?><rss version="2.0"><channel><title>C</title></channel></rss>"""
+    assert parse_feed(xml).entries == []
+
+
+def test_an_html_page_is_rejected() -> None:
+    with pytest.raises(FeedParseError):
+        parse_feed("<html><body>not a feed</body></html>")

@@ -51,7 +51,7 @@ def _content_html(entry: Any) -> str:
 def parse_feed(raw: str | bytes) -> ParsedFeed:
     """Parse RSS or Atom bytes into entries, skipping items with no link or no body."""
     parsed = feedparser.parse(raw)
-    if parsed.bozo and not parsed.entries:
+    if not parsed.version:
         raise FeedParseError("input is not a readable RSS or Atom feed.")
 
     entries: list[FeedEntry] = []

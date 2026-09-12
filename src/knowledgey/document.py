@@ -9,6 +9,7 @@ class Origin(StrEnum):
     """How a document entered the system."""
 
     PASTE = "paste"
+    RSS = "rss"
 
 
 class Document(BaseModel):

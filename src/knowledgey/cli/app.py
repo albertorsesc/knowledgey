@@ -7,7 +7,9 @@ from pydantic import ValidationError
 
 from knowledgey.cli.render import error_console, render, render_many
 from knowledgey.config import get_settings
-from knowledgey.ingest import add_pasted_document
+from knowledgey.feed import FeedParseError
+from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
+from knowledgey.ingest import add_pasted_document, ingest_feed
 from knowledgey.store import DocumentStore, JsonFileDocumentStore
 from knowledgey.version import get_version
 
@@ -16,6 +18,10 @@ app = typer.Typer(help="Ingest and search your knowledge sources.", no_args_is_h
 
 def _document_store() -> DocumentStore:
     return JsonFileDocumentStore(get_settings().data_dir / "documents.json")
+
+
+def _content_fetcher() -> ContentFetcher:
+    return HttpxFetcher()
 
 
 def fail(message: str) -> NoReturn:
@@ -56,6 +62,20 @@ def add(
         )
     except ValidationError as exc:
         fail(describe(exc))
+
+    render(result, as_json=as_json)
+
+
+@app.command("fetch")
+def fetch(
+    url: Annotated[str, typer.Argument(help="URL of an RSS or Atom feed.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Fetch a feed and store its entries as documents."""
+    try:
+        result = ingest_feed(_content_fetcher(), _document_store(), url=url)
+    except (FetchError, FeedParseError) as exc:
+        fail(str(exc))
 
     render(result, as_json=as_json)
 
