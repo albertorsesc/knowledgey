@@ -28,7 +28,7 @@ class FeedIngestResult:
             "feed": self.feed_title or "-",
             "entries": str(self.entries),
             "added": str(self.added),
-            "duplicated": str(self.duplicates),
+            "duplicates": str(self.duplicates),
         }
 
 
