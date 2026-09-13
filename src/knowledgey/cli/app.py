@@ -10,9 +10,20 @@ from knowledgey.config import get_settings
 from knowledgey.feed import FeedParseError
 from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
 from knowledgey.ingest import add_pasted_document, ingest_feed
-from knowledgey.store import DocumentStore, JsonFileDocumentStore
+from knowledgey.registry import UnknownCategoryError, add_category, add_source
+from knowledgey.slug import match_key
+from knowledgey.store import (
+    CategoryStore,
+    DocumentStore,
+    JsonFileCategoryStore,
+    JsonFileDocumentStore,
+    JsonFileSourceStore,
+    SourceStore,
+)
 from knowledgey.version import get_version
 
+category_app = typer.Typer(help="Manage the category vocabulary.", no_args_is_help=True)
+source_app = typer.Typer(help="Manage the sources you fetch from.", no_args_is_help=True)
 app = typer.Typer(help="Ingest and search your knowledge sources.", no_args_is_help=True)
 
 
@@ -107,3 +118,82 @@ def version(
 ) -> None:
     """Show the installed version."""
     render(get_version(), as_json=as_json)
+
+
+def _category_store() -> CategoryStore:
+    return JsonFileCategoryStore(get_settings().data_dir / "categories.json")
+
+
+def _source_store() -> SourceStore:
+    return JsonFileSourceStore(get_settings().data_dir / "sources.json")
+
+
+@category_app.command("add")
+def category_add(
+    label: Annotated[str, typer.Argument(help="Display name, for example 'MLOps'.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Declare a category that sources can be filed under."""
+    try:
+        result = add_category(_category_store(), label=label)
+    except ValidationError as exc:
+        fail(describe(exc))
+
+    render(result, as_json=as_json)
+
+
+@category_app.command("list")
+def category_list(
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """List the declared categories."""
+    render_many(_category_store().list_all(), as_json=as_json)
+
+
+@source_app.command("add")
+def source_add(
+    name: Annotated[str, typer.Option("--name", "-n", help="Display name of the source.")],
+    feed_url: Annotated[str, typer.Option("--feed-url", "-u", help="RSS or Atom URL.")],
+    category: Annotated[
+        list[str] | None,
+        typer.Option("--category", "-c", help="Repeatable. Must already be declared."),
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Register a feed to fetch from."""
+    try:
+        result = add_source(
+            _category_store(),
+            _source_store(),
+            name=name,
+            feed_url=feed_url,
+            category_labels=category or [],
+        )
+    except UnknownCategoryError as exc:
+        fail(str(exc))
+    except ValidationError as exc:
+        fail(describe(exc))
+
+    render(result, as_json=as_json)
+
+
+@source_app.command("list")
+def source_list(
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Show only this category.")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """List registered sources, optionally filtered by category."""
+    sources = _source_store().list_all()
+    if category is not None:
+        wanted = match_key(category)
+        sources = [
+            item for item in sources if any(match_key(slug) == wanted for slug in item.categories)
+        ]
+
+    render_many(sources, as_json=as_json)
+
+
+app.add_typer(category_app, name="category")
+app.add_typer(source_app, name="source")
