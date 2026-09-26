@@ -5,7 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
+
+# Editor and local tooling
 .idea
+.claude/
 
 # Virtual environments
 .venv

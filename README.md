@@ -64,6 +64,7 @@ Every command accepts `--json` for machine-readable output.
 | `kg fetch URL` | Fetch one feed by URL and store its entries. Useful for feeds you do not want to register. |
 | `kg list [-c CATEGORY]` | List stored documents, newest first. |
 | `kg show REF [--raw]` | Show one document. `REF` is the id or any prefix that matches exactly one. |
+| `kg chunks REF` | Show how a document splits into chunks for indexing: index, chunk id, size, first line. |
 | `kg category add LABEL` | Declare a category. Re-adding a spelling variant reports the existing one. |
 | `kg category list` | List declared categories. |
 | `kg source add -n NAME -u FEED_URL [-c CATEGORY]...` | Register a feed. Categories must already be declared. |
@@ -110,6 +111,15 @@ Text output is a table for lists and `key: value` lines for single results. `--j
 - Feed dates become timezone-aware UTC datetimes.
 - A source is stamped as fetched only when its feed came through and was parsed. A network error or a non-feed response leaves the stamp alone and reports the error in that source's row.
 
+## How chunking works
+
+Search will run over chunks, not whole documents: one vector cannot carry the several topics a long article covers. `kg chunks REF` previews the split so you can see what an index will hold.
+
+- Chunks are at most 4000 characters with a 200 character overlap, so a sentence cut at a boundary still appears whole in one of the two chunks.
+- Splitting uses LangChain's `RecursiveCharacterTextSplitter` with a Markdown-aware separator order: horizontal rules, blank lines, code fences, `##` and `#` headings, bold runs, line breaks, sentence ends, spaces, characters. The splitter takes the most structural boundary that keeps a piece under the limit, so a heading starts a chunk and a code block is not cut mid-function.
+- Each chunk has a stable id derived from its document, position and text. Re-chunking unchanged content yields the same ids, which is what makes incremental indexing possible later.
+- The size unit is pluggable: characters today, tokens once an embedding model's tokenizer is in play.
+
 ## Development
 
 ```bash
@@ -134,6 +144,7 @@ src/knowledgey/
   store.py      Repository protocol and the JSON file adapter
   registry.py   category vocabulary and source registry operations
   library.py    querying and looking up stored documents
+  chunking.py   splitting a document into chunks for indexing
   feed.py       RSS and Atom parsing
   markup.py     HTML to Markdown
   fetcher.py    HTTP fetching
@@ -158,7 +169,9 @@ One feature per commit, with its tests. Run `make check` before opening a pull r
 
 Ideas, not commitments, in no particular order:
 
-- Search across titles and bodies.
+- Embeddings and a local vector index over chunks, with hybrid keyword plus semantic search (`kg index`, `kg search`).
+- Answers grounded in retrieved chunks, with the LLM provider behind a port (`kg ask`).
+- An HTTP API exposing the same operations.
 - A SQLite store behind the same `Repository` protocol.
 - Fetching the full article when a feed only carries a summary.
 - Enabling, disabling and removing sources from the command line.

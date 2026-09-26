@@ -5,8 +5,10 @@ from typing import Annotated, NoReturn
 import typer
 from pydantic import ValidationError
 
+from knowledgey.chunking import chunk_document
 from knowledgey.cli.render import error_console, render, render_document, render_many
 from knowledgey.config import get_settings
+from knowledgey.document import Document
 from knowledgey.feed import FeedParseError
 from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
 from knowledgey.ingest import add_pasted_document, ingest_feed, ingest_sources
@@ -116,13 +118,7 @@ def list_documents(
     render_many(select_documents(_document_store(), category=category), as_json=as_json)
 
 
-@app.command("show")
-def show(
-    ref: Annotated[str, typer.Argument(help="Document ID, or a unique prefix of it.")],
-    raw: Annotated[bool, typer.Option("--raw", help="Print only the stored Markdown.")] = False,
-    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
-) -> None:
-    """Show one stored document."""
+def _find_or_fail(ref: str) -> Document:
     try:
         document = find_document(_document_store(), ref)
     except AmbiguousReferenceError as exc:
@@ -131,7 +127,26 @@ def show(
     if document is None:
         fail(f"no document matches {ref!r}. See: kg list")
 
-    render_document(document, raw=raw, as_json=as_json)
+    return document
+
+
+@app.command("show")
+def show(
+    ref: Annotated[str, typer.Argument(help="Document ID, or a unique prefix of it.")],
+    raw: Annotated[bool, typer.Option("--raw", help="Print only the stored Markdown.")] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show one stored document."""
+    render_document(_find_or_fail(ref), raw=raw, as_json=as_json)
+
+
+@app.command("chunks")
+def chunks(
+    ref: Annotated[str, typer.Argument(help="Document ID, or a unique prefix of it.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show how a stored document splits into chunks for indexing."""
+    render_many(chunk_document(_find_or_fail(ref)), as_json=as_json)
 
 
 @app.callback()
