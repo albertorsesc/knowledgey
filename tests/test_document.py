@@ -41,3 +41,24 @@ def test_as_dict_summarises_without_full_content() -> None:
     data = make(content="one two three").as_dict()
     assert data["words"] == "3"
     assert "content" not in data
+
+
+def test_documents_carry_no_source_by_default() -> None:
+    document = make()
+    assert document.source is None
+    assert document.categories == ()
+
+
+def test_categories_are_normalised() -> None:
+    document = Document(
+        title="T", content="c", origin=Origin.PASTE, categories=("ML Ops", "mlops", "RAG")
+    )
+    assert document.categories == ("ml-ops", "mlops", "rag")
+
+
+def test_as_dict_shows_source_and_categories() -> None:
+    document = Document(
+        title="T", content="c", origin=Origin.RSS, source="tnm", categories=("mlops",)
+    )
+    data = document.as_dict()
+    assert (data["source"], data["categories"]) == ("tnm", "mlops")

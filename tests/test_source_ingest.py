@@ -106,3 +106,15 @@ def test_success_and_failure_rows_share_columns(tmp_path: Path) -> None:
     failed = ingest_source(Broken(), documents, sources, source).as_dict()
 
     assert list(ok) == list(failed)
+
+
+def test_documents_are_filed_under_the_source(tmp_path: Path) -> None:
+    documents, sources = stores(tmp_path)
+    source = Source.model_validate(
+        {"name": "A", "feed_url": "https://a.com/feed", "categories": ("mlops",)}
+    )
+    sources.save(source)
+
+    ingest_source(FakeFetcher(FEED), documents, sources, source)
+
+    assert {(d.source, d.categories) for d in documents.list_all()} == {("a", ("mlops",))}

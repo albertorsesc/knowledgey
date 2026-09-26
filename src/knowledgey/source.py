@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from knowledgey.document import Origin
-from knowledgey.slug import slugify
+from knowledgey.slug import normalize_slugs, slugify
 
 
 class Source(BaseModel):
@@ -52,12 +52,7 @@ class Source(BaseModel):
     @field_validator("categories")
     @classmethod
     def _normalize_categories(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        kept: list[str] = []
-        for raw in value:
-            slug = slugify(raw)
-            if slug and slug not in kept:
-                kept.append(slug)
-        return tuple(kept)
+        return normalize_slugs(value)
 
     def as_dict(self) -> dict[str, str]:
         return {

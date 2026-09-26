@@ -35,7 +35,14 @@ class FeedIngestResult:
         }
 
 
-def ingest_feed(fetcher: ContentFetcher, store: DocumentStore, *, url: str) -> FeedIngestResult:
+def ingest_feed(
+    fetcher: ContentFetcher,
+    store: DocumentStore,
+    *,
+    url: str,
+    source: str | None = None,
+    categories: Sequence[str] = (),
+) -> FeedIngestResult:
     """Fetch a feed, convert each entry to a document, and store the new ones."""
     parsed = parse_feed(fetcher.fetch(url))
     added = 0
@@ -51,6 +58,8 @@ def ingest_feed(fetcher: ContentFetcher, store: DocumentStore, *, url: str) -> F
             origin=Origin.RSS,
             url=entry.url,
             authors=entry.authors,
+            source=source,
+            categories=tuple(categories),
             published_at=entry.published_at,
         )
 
@@ -74,10 +83,16 @@ def add_pasted_document(
     content: str,
     url: str | None = None,
     authors: list[str] | None = None,
+    categories: Sequence[str] = (),
 ) -> AddResult:
     """Create a document from pasted text and store it."""
     document = Document(
-        title=title, content=content, origin=Origin.PASTE, url=url, authors=authors or []
+        title=title,
+        content=content,
+        origin=Origin.PASTE,
+        url=url,
+        authors=authors or [],
+        categories=tuple(categories),
     )
 
     return AddResult(document=document, created=store.save(document))
@@ -113,7 +128,13 @@ def ingest_source(
 ) -> SourceFetchResult:
     """Fetch one registered source; stamp it as fetched only when the feed came through."""
     try:
-        ingested = ingest_feed(fetcher, documents, url=source.feed_url)
+        ingested = ingest_feed(
+            fetcher,
+            documents,
+            url=source.feed_url,
+            source=source.slug,
+            categories=source.categories,
+        )
     except (FetchError, FeedParseError) as exc:
         return SourceFetchResult(source=source, error=str(exc))
 

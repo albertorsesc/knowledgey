@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from knowledgey.category import Category
-from knowledgey.slug import match_key
+from knowledgey.slug import has_match, match_key
 from knowledgey.source import Source
 from knowledgey.store import CategoryStore, SourceStore
 
@@ -88,10 +88,9 @@ def select_sources(
     enabled_only: bool = True,
 ) -> list[Source]:
     """Pick registered sources, optionally narrowed to one category."""
-    wanted = match_key(category) if category is not None else None
     return [
         source
         for source in sources.list_all()
         if (not enabled_only or source.enabled)
-        and (wanted is None or any(match_key(slug) == wanted for slug in source.categories))
+        and (category is None or has_match(source.categories, category))
     ]

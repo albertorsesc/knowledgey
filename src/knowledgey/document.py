@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from knowledgey.slug import normalize_slugs
+
 
 class Origin(StrEnum):
     """How a document entered the system."""
@@ -22,6 +24,8 @@ class Document(BaseModel):
     origin: Origin
     url: str | None = None
     authors: list[str] = Field(default_factory=list)
+    source: str | None = None
+    categories: tuple[str, ...] = ()
     published_at: datetime | None = None
     added_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -32,6 +36,11 @@ class Document(BaseModel):
             raise ValueError("must not be blank.")
 
         return value
+
+    @field_validator("categories")
+    @classmethod
+    def _normalize_categories(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return normalize_slugs(value)
 
     @property
     def doc_id(self) -> str:
@@ -45,6 +54,8 @@ class Document(BaseModel):
             "id": self.doc_id,
             "title": self.title,
             "origin": self.origin.value,
+            "source": self.source or "-",
+            "categories": ", ".join(self.categories) or "-",
             "url": self.url or "-",
             "authors": ", ".join(self.authors) or "-",
             "words": str(len(self.content.split())),

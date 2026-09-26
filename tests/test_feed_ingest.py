@@ -64,3 +64,11 @@ def test_the_requested_url_is_the_one_fetched(tmp_path: Path) -> None:
     fetcher = FakeFetcher(FEED)
     ingest_feed(fetcher, JsonFileDocumentStore(tmp_path / "d.json"), url="https://ex.com/feed")
     assert fetcher.calls == ["https://ex.com/feed"]
+
+
+def test_documents_carry_their_source_and_categories(tmp_path: Path) -> None:
+    store = JsonFileDocumentStore(tmp_path / "d.json")
+    ingest_feed(
+        FakeFetcher(FEED), store, url="https://ex.com/feed", source="tnm", categories=("mlops",)
+    )
+    assert {(d.source, d.categories) for d in store.list_all()} == {("tnm", ("mlops",))}

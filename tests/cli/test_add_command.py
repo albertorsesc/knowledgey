@@ -50,3 +50,19 @@ def test_blank_content_shows_a_clean_message() -> None:
     assert result.exit_code == 1
     assert "Traceback" not in result.output
     assert "must not be blank" in result.output
+
+
+def test_add_files_under_a_declared_category() -> None:
+    runner.invoke(app, ["category", "add", "MLOps"])
+    result = runner.invoke(app, ["add", "--title", "N", "-c", "ML Ops", "--json"], input="text")
+
+    assert result.exit_code == 0
+    assert json.loads(result.output)["categories"] == "mlops"
+
+
+def test_add_rejects_an_undeclared_category() -> None:
+    result = runner.invoke(app, ["add", "--title", "N", "-c", "rag"], input="text")
+
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+    assert "unknown category" in result.output

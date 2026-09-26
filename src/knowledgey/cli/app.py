@@ -10,7 +10,14 @@ from knowledgey.config import get_settings
 from knowledgey.feed import FeedParseError
 from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
 from knowledgey.ingest import add_pasted_document, ingest_feed, ingest_sources
-from knowledgey.registry import UnknownCategoryError, add_category, add_source, select_sources
+from knowledgey.library import select_documents
+from knowledgey.registry import (
+    UnknownCategoryError,
+    add_category,
+    add_source,
+    resolve_categories,
+    select_sources,
+)
 from knowledgey.store import (
     CategoryStore,
     DocumentStore,
@@ -59,17 +66,25 @@ def add(
     file: Annotated[Path | None, typer.Option("--file", "-f", help="Read from a file.")] = None,
     url: Annotated[str | None, typer.Option("--url", help="Original URL, if any.")] = None,
     author: Annotated[list[str] | None, typer.Option("--author", help="Repeatable.")] = None,
+    category: Annotated[
+        list[str] | None,
+        typer.Option("--category", "-c", help="Repeatable. Must already be declared."),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
 ) -> None:
     """Add a document from a file or standard input."""
     try:
+        categories = resolve_categories(_category_store(), category or [])
         result = add_pasted_document(
             _document_store(),
             title=title,
             content=_read_content(file),
             url=url,
             authors=author,
+            categories=categories,
         )
+    except UnknownCategoryError as exc:
+        fail(str(exc))
     except ValidationError as exc:
         fail(describe(exc))
 
@@ -92,10 +107,13 @@ def fetch(
 
 @app.command("list")
 def list_documents(
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Show only this category.")
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
 ) -> None:
-    """List stored documents, newest first."""
-    render_many(_document_store().list_all(), as_json=as_json)
+    """List stored documents, newest first, optionally filtered by category."""
+    render_many(select_documents(_document_store(), category=category), as_json=as_json)
 
 
 @app.callback()

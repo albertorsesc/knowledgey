@@ -46,3 +46,13 @@ def test_blank_content_shows_a_clean_message() -> None:
     assert result.exit_code == 1
     assert "Traceback" not in result.output
     assert "must not be blank" in result.output
+
+
+def test_list_filters_by_category() -> None:
+    runner.invoke(app, ["category", "add", "MLOps"])
+    runner.invoke(app, ["category", "add", "RAG"])
+    runner.invoke(app, ["add", "--title", "A", "-c", "MLOps"], input="alpha text")
+    runner.invoke(app, ["add", "--title", "B", "-c", "RAG"], input="beta text")
+    result = runner.invoke(app, ["list", "-c", "mlops", "--json"])
+
+    assert [row["title"] for row in json.loads(result.output)] == ["A"]
