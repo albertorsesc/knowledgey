@@ -10,8 +10,7 @@ from knowledgey.config import get_settings
 from knowledgey.feed import FeedParseError
 from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
 from knowledgey.ingest import add_pasted_document, ingest_feed
-from knowledgey.registry import UnknownCategoryError, add_category, add_source
-from knowledgey.slug import match_key
+from knowledgey.registry import UnknownCategoryError, add_category, add_source, select_sources
 from knowledgey.store import (
     CategoryStore,
     DocumentStore,
@@ -185,13 +184,7 @@ def source_list(
     as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
 ) -> None:
     """List registered sources, optionally filtered by category."""
-    sources = _source_store().list_all()
-    if category is not None:
-        wanted = match_key(category)
-        sources = [
-            item for item in sources if any(match_key(slug) == wanted for slug in item.categories)
-        ]
-
+    sources = select_sources(_source_store(), category=category, enabled_only=False)
     render_many(sources, as_json=as_json)
 
 

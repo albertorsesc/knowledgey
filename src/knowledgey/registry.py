@@ -79,3 +79,19 @@ def add_source(
         return SourceAddResult(source=existing, created=False)
 
     return SourceAddResult(source=candidate, created=sources.save(candidate))
+
+
+def select_sources(
+    sources: SourceStore,
+    *,
+    category: str | None = None,
+    enabled_only: bool = True,
+) -> list[Source]:
+    """Pick registered sources, optionally narrowed to one category."""
+    wanted = match_key(category) if category is not None else None
+    return [
+        source
+        for source in sources.list_all()
+        if (not enabled_only or source.enabled)
+        and (wanted is None or any(match_key(slug) == wanted for slug in source.categories))
+    ]

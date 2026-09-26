@@ -7,6 +7,7 @@ from knowledgey.registry import (
     add_category,
     add_source,
     resolve_categories,
+    select_sources,
 )
 from knowledgey.store import JsonFileCategoryStore, JsonFileSourceStore
 
@@ -97,3 +98,42 @@ def test_registering_the_same_source_twice_is_not_a_duplicate(tmp_path: Path) ->
 
     assert result.created is False
     assert len(sources.list_all()) == 1
+
+
+def test_select_returns_only_enabled_sources_by_default(tmp_path: Path) -> None:
+    categories, sources = stores(tmp_path)
+    add_source(categories, sources, name="A", feed_url="https://a.com/feed")
+    added = add_source(categories, sources, name="B", feed_url="https://b.com/feed")
+    sources.replace(added.source.model_copy(update={"enabled": False}))
+
+    assert [item.name for item in select_sources(sources)] == ["A"]
+
+
+def test_select_can_include_disabled_sources(tmp_path: Path) -> None:
+    categories, sources = stores(tmp_path)
+    add_source(categories, sources, name="A", feed_url="https://a.com/feed")
+    added = add_source(categories, sources, name="B", feed_url="https://b.com/feed")
+    sources.replace(added.source.model_copy(update={"enabled": False}))
+
+    assert [item.name for item in select_sources(sources, enabled_only=False)] == ["A", "B"]
+
+
+def test_select_narrows_to_a_category_across_spellings(tmp_path: Path) -> None:
+    categories, sources = stores(tmp_path)
+    add_category(categories, label="MLOps")
+    add_category(categories, label="RAG")
+    add_source(
+        categories, sources, name="A", feed_url="https://a.com/feed", category_labels=["MLOps"]
+    )
+    add_source(
+        categories, sources, name="B", feed_url="https://b.com/feed", category_labels=["RAG"]
+    )
+
+    assert [item.name for item in select_sources(sources, category="ML Ops")] == ["A"]
+
+
+def test_select_with_an_unknown_category_is_empty(tmp_path: Path) -> None:
+    categories, sources = stores(tmp_path)
+    add_source(categories, sources, name="A", feed_url="https://a.com/feed")
+
+    assert select_sources(sources, category="nope") == []
