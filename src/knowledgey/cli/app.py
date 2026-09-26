@@ -9,7 +9,7 @@ from knowledgey.cli.render import error_console, render, render_many
 from knowledgey.config import get_settings
 from knowledgey.feed import FeedParseError
 from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
-from knowledgey.ingest import add_pasted_document, ingest_feed
+from knowledgey.ingest import add_pasted_document, ingest_feed, ingest_sources
 from knowledgey.registry import UnknownCategoryError, add_category, add_source, select_sources
 from knowledgey.store import (
     CategoryStore,
@@ -186,6 +186,25 @@ def source_list(
     """List registered sources, optionally filtered by category."""
     sources = select_sources(_source_store(), category=category, enabled_only=False)
     render_many(sources, as_json=as_json)
+
+
+@source_app.command("fetch")
+def source_fetch(
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Only sources in this category.")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Fetch every enabled source, optionally only those in one category."""
+    sources = _source_store()
+    selected = select_sources(sources, category=category)
+    if not selected:
+        fail("no enabled sources match. Register one with: kg source add")
+
+    results = ingest_sources(_content_fetcher(), _document_store(), sources, selected)
+    render_many(results, as_json=as_json)
+    if any(not result.ok for result in results):
+        raise typer.Exit(code=1)
 
 
 app.add_typer(category_app, name="category")
