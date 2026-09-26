@@ -5,12 +5,12 @@ from typing import Annotated, NoReturn
 import typer
 from pydantic import ValidationError
 
-from knowledgey.cli.render import error_console, render, render_many
+from knowledgey.cli.render import error_console, render, render_document, render_many
 from knowledgey.config import get_settings
 from knowledgey.feed import FeedParseError
 from knowledgey.fetcher import ContentFetcher, FetchError, HttpxFetcher
 from knowledgey.ingest import add_pasted_document, ingest_feed, ingest_sources
-from knowledgey.library import select_documents
+from knowledgey.library import AmbiguousReferenceError, find_document, select_documents
 from knowledgey.registry import (
     UnknownCategoryError,
     add_category,
@@ -114,6 +114,24 @@ def list_documents(
 ) -> None:
     """List stored documents, newest first, optionally filtered by category."""
     render_many(select_documents(_document_store(), category=category), as_json=as_json)
+
+
+@app.command("show")
+def show(
+    ref: Annotated[str, typer.Argument(help="Document ID, or a unique prefix of it.")],
+    raw: Annotated[bool, typer.Option("--raw", help="Print only the stored Markdown.")] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show one stored document."""
+    try:
+        document = find_document(_document_store(), ref)
+    except AmbiguousReferenceError as exc:
+        fail(str(exc))
+
+    if document is None:
+        fail(f"no document matches {ref!r}. See: kg list")
+
+    render_document(document, raw=raw, as_json=as_json)
 
 
 @app.callback()

@@ -60,3 +60,11 @@ class Document(BaseModel):
             "authors": ", ".join(self.authors) or "-",
             "words": str(len(self.content.split())),
         }
+
+    def as_detail(self) -> dict[str, str]:
+        return {
+            **self.as_dict(),
+            "published": self.published_at.isoformat() if self.published_at else "-",
+            "added": self.added_at.isoformat(),
+            "content": self.content,
+        }

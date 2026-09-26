@@ -62,3 +62,10 @@ def test_as_dict_shows_source_and_categories() -> None:
     )
     data = document.as_dict()
     assert (data["source"], data["categories"]) == ("tnm", "mlops")
+
+
+def test_as_detail_includes_content_and_timestamps() -> None:
+    data = make(content="one two three").as_detail()
+    assert data["content"] == "one two three"
+    assert data["published"] == "-"
+    assert data["added"]
