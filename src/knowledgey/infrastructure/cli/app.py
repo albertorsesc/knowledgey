@@ -1,0 +1,266 @@
+import sys
+from pathlib import Path
+from typing import Annotated, NoReturn
+
+import typer
+from pydantic import ValidationError
+
+from knowledgey.application.ingest import add_pasted_document, ingest_feed, ingest_sources
+from knowledgey.application.library import AmbiguousReferenceError, find_document, select_documents
+from knowledgey.application.ports import (
+    CategoryStore,
+    ContentFetcher,
+    DocumentStore,
+    FetchError,
+    SourceStore,
+)
+from knowledgey.application.registry import (
+    UnknownCategoryError,
+    add_category,
+    add_source,
+    resolve_categories,
+    select_sources,
+)
+from knowledgey.domain.document import Document
+from knowledgey.infrastructure.chunking.langchain_splitter import chunk_document
+from knowledgey.infrastructure.cli.render import error_console, render, render_document, render_many
+from knowledgey.infrastructure.config import get_settings
+from knowledgey.infrastructure.content.feedparser_feed import FeedParseError
+from knowledgey.infrastructure.content.httpx_fetcher import HttpxFetcher
+from knowledgey.infrastructure.persistence.json_store import (
+    JsonFileCategoryStore,
+    JsonFileDocumentStore,
+    JsonFileSourceStore,
+)
+from knowledgey.infrastructure.version import get_version
+
+category_app = typer.Typer(help="Manage the category vocabulary.", no_args_is_help=True)
+source_app = typer.Typer(help="Manage the sources you fetch from.", no_args_is_help=True)
+app = typer.Typer(help="Ingest and search your knowledge sources.", no_args_is_help=True)
+
+
+def _document_store() -> DocumentStore:
+    return JsonFileDocumentStore(get_settings().data_dir / "documents.json")
+
+
+def _content_fetcher() -> ContentFetcher:
+    return HttpxFetcher()
+
+
+def fail(message: str) -> NoReturn:
+    error_console.print(f"[bold red]Error:[/bold red] {message}")
+    raise typer.Exit(code=1)
+
+
+def describe(exc: ValidationError) -> str:
+    first = exc.errors()[0]
+    field = ".".join(str(part) for part in first["loc"]) or "input"
+    return f"{field}: {first['msg']}"
+
+
+def _read_content(file: Path | None) -> str:
+    if file is not None:
+        return file.read_text(encoding="utf-8")
+    if sys.stdin.isatty():
+        fail("no input. Pipe text in, or pass --file.")
+    return sys.stdin.read()
+
+
+@app.command("add")
+def add(
+    title: Annotated[str, typer.Option("--title", "-t", help="Title of the document.")],
+    file: Annotated[Path | None, typer.Option("--file", "-f", help="Read from a file.")] = None,
+    url: Annotated[str | None, typer.Option("--url", help="Original URL, if any.")] = None,
+    author: Annotated[list[str] | None, typer.Option("--author", help="Repeatable.")] = None,
+    category: Annotated[
+        list[str] | None,
+        typer.Option("--category", "-c", help="Repeatable. Must already be declared."),
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Add a document from a file or standard input."""
+    try:
+        categories = resolve_categories(_category_store(), category or [])
+        result = add_pasted_document(
+            _document_store(),
+            title=title,
+            content=_read_content(file),
+            url=url,
+            authors=author,
+            categories=categories,
+        )
+    except UnknownCategoryError as exc:
+        fail(str(exc))
+    except ValidationError as exc:
+        fail(describe(exc))
+
+    render(result, as_json=as_json)
+
+
+@app.command("fetch")
+def fetch(
+    url: Annotated[str, typer.Argument(help="URL of an RSS or Atom feed.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Fetch a feed and store its entries as documents."""
+    try:
+        result = ingest_feed(_content_fetcher(), _document_store(), url=url)
+    except (FetchError, FeedParseError) as exc:
+        fail(str(exc))
+
+    render(result, as_json=as_json)
+
+
+@app.command("list")
+def list_documents(
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Show only this category.")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """List stored documents, newest first, optionally filtered by category."""
+    render_many(select_documents(_document_store(), category=category), as_json=as_json)
+
+
+def _find_or_fail(ref: str) -> Document:
+    try:
+        document = find_document(_document_store(), ref)
+    except AmbiguousReferenceError as exc:
+        fail(str(exc))
+
+    if document is None:
+        fail(f"no document matches {ref!r}. See: kg list")
+
+    return document
+
+
+@app.command("show")
+def show(
+    ref: Annotated[str, typer.Argument(help="Document ID, or a unique prefix of it.")],
+    raw: Annotated[bool, typer.Option("--raw", help="Print only the stored Markdown.")] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show one stored document."""
+    render_document(_find_or_fail(ref), raw=raw, as_json=as_json)
+
+
+@app.command("chunks")
+def chunks(
+    ref: Annotated[str, typer.Argument(help="Document ID, or a unique prefix of it.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show how a stored document splits into chunks for indexing."""
+    render_many(chunk_document(_find_or_fail(ref)), as_json=as_json)
+
+
+@app.callback()
+def main() -> None:
+    """Ingest and search your knowledge sources."""
+
+
+@app.command("config")
+def show_config(
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show the active configuration."""
+    render(get_settings(), as_json=as_json)
+
+
+@app.command()
+def version(
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Show the installed version."""
+    render(get_version(), as_json=as_json)
+
+
+def _category_store() -> CategoryStore:
+    return JsonFileCategoryStore(get_settings().data_dir / "categories.json")
+
+
+def _source_store() -> SourceStore:
+    return JsonFileSourceStore(get_settings().data_dir / "sources.json")
+
+
+@category_app.command("add")
+def category_add(
+    label: Annotated[str, typer.Argument(help="Display name, for example 'MLOps'.")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Declare a category that sources can be filed under."""
+    try:
+        result = add_category(_category_store(), label=label)
+    except ValidationError as exc:
+        fail(describe(exc))
+
+    render(result, as_json=as_json)
+
+
+@category_app.command("list")
+def category_list(
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """List the declared categories."""
+    render_many(_category_store().list_all(), as_json=as_json)
+
+
+@source_app.command("add")
+def source_add(
+    name: Annotated[str, typer.Option("--name", "-n", help="Display name of the source.")],
+    feed_url: Annotated[str, typer.Option("--feed-url", "-u", help="RSS or Atom URL.")],
+    category: Annotated[
+        list[str] | None,
+        typer.Option("--category", "-c", help="Repeatable. Must already be declared."),
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Register a feed to fetch from."""
+    try:
+        result = add_source(
+            _category_store(),
+            _source_store(),
+            name=name,
+            feed_url=feed_url,
+            category_labels=category or [],
+        )
+    except UnknownCategoryError as exc:
+        fail(str(exc))
+    except ValidationError as exc:
+        fail(describe(exc))
+
+    render(result, as_json=as_json)
+
+
+@source_app.command("list")
+def source_list(
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Show only this category.")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """List registered sources, optionally filtered by category."""
+    sources = select_sources(_source_store(), category=category, enabled_only=False)
+    render_many(sources, as_json=as_json)
+
+
+@source_app.command("fetch")
+def source_fetch(
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Only sources in this category.")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output in JSON format.")] = False,
+) -> None:
+    """Fetch every enabled source, optionally only those in one category."""
+    sources = _source_store()
+    selected = select_sources(sources, category=category)
+    if not selected:
+        fail("no enabled sources match. Register one with: kg source add")
+
+    results = ingest_sources(_content_fetcher(), _document_store(), sources, selected)
+    render_many(results, as_json=as_json)
+    if any(not result.ok for result in results):
+        raise typer.Exit(code=1)
+
+
+app.add_typer(category_app, name="category")
+app.add_typer(source_app, name="source")

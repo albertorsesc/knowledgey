@@ -137,22 +137,18 @@ The gate is `ruff` with the `E F I B UP SIM` rule sets, `mypy --strict` over `sr
 
 ```
 src/knowledgey/
-  document.py   Document model and identity
-  source.py     Source model
-  category.py   Category model
-  slug.py       slugify, match keys, normalisation shared by the models
-  store.py      Repository protocol and the JSON file adapter
-  registry.py   category vocabulary and source registry operations
-  library.py    querying and looking up stored documents
-  chunking.py   splitting a document into chunks for indexing
-  feed.py       RSS and Atom parsing
-  markup.py     HTML to Markdown
-  fetcher.py    HTTP fetching
-  ingest.py     turning feeds and pasted text into stored documents
-  config.py     settings, KG_ prefix
-  cli/          Typer application and Rich rendering
-tests/          mirrors src; tests/cli drives the CLI through Typer's test runner
+  domain/              models and value objects: document, source, category, slug, chunk
+  application/         use cases (ingest, registry, library) and the ports they depend on
+  infrastructure/
+    persistence/       JSON file store behind the Repository port
+    content/           HTTP fetching, RSS and Atom parsing, HTML to Markdown
+    chunking/          LangChain-backed splitter
+    cli/               Typer application and Rich rendering
+    config.py          settings, KG_ prefix
+tests/                 mirrors src: domain/, application/, infrastructure/
 ```
+
+The dependency rule: `domain` imports nothing above it and no third-party package except pydantic; `application` imports `domain` and its own ports; `infrastructure` implements the ports and is the only layer that knows about vendors. Swapping a vendor means one new module under `infrastructure/`, wired in one place.
 
 ### Design rules
 
